@@ -1,4 +1,4 @@
-<?
+<?php
 final class Amocrm {
 	private $auth;
 	private $user = array();

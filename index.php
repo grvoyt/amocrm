@@ -1,4 +1,4 @@
-<?
+<?php
 require_once 'amocrm.php';
 require_once 'config.php';
 
