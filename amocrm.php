@@ -10,12 +10,14 @@ final class Amocrm {
 
 	public $debug = false;
 
-	public function __construct($login,$hash,$subdomain) {
+	public function __construct($login,$hash,$subdomain,$debug = false) {
+        $this->debug = $debug;
 		$this->user = array(
 			'USER_LOGIN' => $login,
 			'USER_HASH' => $hash
 		);
 		$this->subdomain = $subdomain;
+		if($this->debug) $this->log('Created params ==> ',$this->user );
 	}
 
 	// информация об аккаунте
@@ -80,7 +82,7 @@ final class Amocrm {
 		$subdom = $this->subdomain;
 		$link = 'https://' . $subdom . '.amocrm.ru/private/api/auth.php?type=json';
 		$response = $this->curlSend($link,$this->user);
-		if($this->debug) $this->log('AUTH ==> '.$response);
+		if($this->debug) $this->log('AUTH ==> ',$response);
 		return $response;
 	}
 
@@ -120,25 +122,26 @@ final class Amocrm {
 		}
 
 		if($this->debug) {
-			$this->log('Lead data ==> '.json_encode($leads));
+			$this->log('Lead data ==> ',$leads);
 		}
 		$link = 'https://' . $this->subdomain . '.amocrm.ru/private/api/v2/json/leads/set';
 
-		$res = $this->curlSend($link,$leads);
-		$lead_id = json_decode( $res, true); // отправка лида
-		if($this->debug) $this->log('answer server ==> '.$res);
+		$res = $this->curlSend($link,$leads); // отправка лида
+		$lead_id = json_decode( $res, true);
+		if($this->debug) $this->log('answer server ==> ',$lead_id);
 		$lead_id = $lead_id['response']['leads']['add'][0]['id']; // получение id сделки
 		$this->lead_id = $lead_id;
 		return true;
 	}
 
-	public function log($data,$vardump = false) {
+	public function log($text,$data,$vardump = false) {
 		if($vardump) {
+		    print_r($text.PHP_EOL);
 			var_dump($data);
 		} else {
-			print_r($data);
+			print_r($text.json_encode($data));
 		}
-		print_r(PHP_EOL);
+		print_r(PHP_EOL.PHP_EOL);
 	}
 
 	// установка контакта

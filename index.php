@@ -3,14 +3,14 @@ require_once 'amocrm.php';
 require_once 'config.php';
 
 
-$amo = new Amocrm($email,$api_key,$domain);
-$amo->debug = true;
+$amo = new Amocrm($email,$api_key,$domain,true);
 
-$amocrm_map=array(
+$amocrm_map = [
     'phone' => '285787', //поля в амоCrm
     'email' => '285789',
-);
+];
 $amo->setMap($amocrm_map); // установка кастомных полей
+$amo->getMap();
 $amo->setStatus('15663874'); // eads_status id Воронка для лидов
 $amo->setTags('mail.rf'); // Установка тегов к заявке
 
@@ -21,6 +21,7 @@ $lead = array(
 );
 $amo->leadSet($lead);
 print_r( $amo->getLeadId()); // отправка лида
+die;
 
 $cont = array(
 	'phone' => '89261234567',
