@@ -8,6 +8,8 @@ final class Amocrm {
 	private $tags;
 	private $lead_id;
 
+	public $debug = false;
+
 	public function __construct($login,$hash,$subdomain) {
 		$this->user = array(
 			'USER_LOGIN' => $login,
@@ -37,6 +39,10 @@ final class Amocrm {
 		print_r( $this->amocrm_map );
 	}
 
+	public function getLeadId() {
+		return $this->lead_id;
+	}
+
 	// установка воронки
 	public function setStatus($data = '') {
 		$this->voronka_id = $data;
@@ -48,12 +54,13 @@ final class Amocrm {
 	}
 
 	// функция запроса CURL
-	public function curlSend($link = '',$data = array()) {
+	public function curlSend($link = '',$data='') {
+		$method = is_array($data) ? 'POST' : 'GET';
 		$curl = curl_init();
 		curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($curl, CURLOPT_USERAGENT, 'amoCRM-API-client/1.0');
 		curl_setopt($curl, CURLOPT_URL, $link);
-		curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'POST');
+		curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
 		curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
 		curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
 		curl_setopt($curl, CURLOPT_HEADER, false);
@@ -72,7 +79,9 @@ final class Amocrm {
 	public function auth() {
 		$subdom = $this->subdomain;
 		$link = 'https://' . $subdom . '.amocrm.ru/private/api/auth.php?type=json';
-		return $this->curlSend($link,$this->user);
+		$response = $this->curlSend($link,$this->user);
+		if($this->debug) $this->log('AUTH ==> '.$response);
+		return $response;
 	}
 
 	// установка лида
@@ -110,13 +119,26 @@ final class Amocrm {
 			$leads['request']['leads']['add'][0]['tags'] = $this->tags;
 		}
 
+		if($this->debug) {
+			$this->log('Lead data ==> '.json_encode($leads));
+		}
 		$link = 'https://' . $this->subdomain . '.amocrm.ru/private/api/v2/json/leads/set';
 
 		$res = $this->curlSend($link,$leads);
 		$lead_id = json_decode( $res, true); // отправка лида
+		if($this->debug) $this->log('answer server ==> '.$res);
 		$lead_id = $lead_id['response']['leads']['add'][0]['id']; // получение id сделки
 		$this->lead_id = $lead_id;
 		return true;
+	}
+
+	public function log($data,$vardump = false) {
+		if($vardump) {
+			var_dump($data);
+		} else {
+			print_r($data);
+		}
+		print_r(PHP_EOL);
 	}
 
 	// установка контакта
@@ -184,5 +206,19 @@ final class Amocrm {
 	    return $this->curlSend($link,$notes);
 	    
 	} 
+
+	public function checkContact($user) {
+		if(!is_array($user)) return 0;
+
+	} 
+
+	public function contact() {
+		$link='https://'.$this->subdomain.".amocrm.ru/private/api/v2/json/contacts?type=json";
+		return $this->curlSend($link);
+	} 
+
+	public function __call($method,$data) {
+		$link='https://'.$this->subdomain.".amocrm.ru/private/api/v2/json/$action/set?type=json";
+	}
 
 }

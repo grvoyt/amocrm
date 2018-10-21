@@ -4,6 +4,7 @@ require_once 'config.php';
 
 
 $amo = new Amocrm($email,$api_key,$domain);
+$amo->debug = true;
 
 $amocrm_map=array(
     'phone' => '285787', //поля в амоCrm
@@ -18,7 +19,8 @@ $amo->auth(); // Аунтификация в амосрм
 $lead = array(
 	'lead_name' => '#230133 Заявка на Директ', // заголовок лида
 );
-$amo->leadSet($lead); // отправка лида
+$amo->leadSet($lead);
+print_r( $amo->getLeadId()); // отправка лида
 
 $cont = array(
 	'phone' => '89261234567',
