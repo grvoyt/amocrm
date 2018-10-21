@@ -98,7 +98,7 @@ final class Amocrm {
 		if( $this->voronka_id ) {
 			$leads['request']['leads']['add'][0]['status_id'] = $this->voronka_id;
 		}
-
+        $this->log('map',$this->amocrm_map);
 		if( $this->amocrm_map ) {
 			foreach($data as $k => $v) {
 				if(!isset($this->amocrm_map[$k])) continue;
