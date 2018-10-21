@@ -2,17 +2,15 @@
 require_once 'amocrm.php';
 require_once 'config.php';
 
+$amo = new Amocrm($email,$api_key,$domain);
 
-$amo = new Amocrm($email,$api_key,$domain,true);
+$amo->setMapContacts([
+    'phone' => 224661,
+    'email' => 224663,
+]);
 
-$amocrm_map = [
-    'phone' => '285787', //поля в амоCrm
-    'email' => '285789',
-];
-$amo->setMap($amocrm_map); // установка кастомных полей
-$amo->getMap();
-$amo->setStatus('15663874'); // eads_status id Воронка для лидов
-$amo->setTags('mail.rf'); // Установка тегов к заявке
+$amo->setStatus('22240021'); // leads_status id Воронка для лидов
+$amo->setTags('Timepad'); // Установка тегов к заявке
 
 $amo->auth(); // Аунтификация в амосрм
 
@@ -20,8 +18,6 @@ $lead = array(
 	'lead_name' => '#230133 Заявка на Директ', // заголовок лида
 );
 $amo->leadSet($lead);
-print_r( $amo->getLeadId()); // отправка лида
-die;
 
 $cont = array(
 	'phone' => '89261234567',

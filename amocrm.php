@@ -1,14 +1,15 @@
 <?php
-final class Amocrm {
+class Amocrm {
 	private $auth;
 	private $user = array();
-	private $subdomain;
+	private $url;
 	private $amocrm_map;
+	private $contacts_map;
 	private $voronka_id;
 	private $tags;
 	private $lead_id;
-
-	public $debug = false;
+	private $debug = false;
+	private $subdomain;
 
 	public function __construct($login,$hash,$subdomain,$debug = false) {
         $this->debug = $debug;
@@ -16,25 +17,37 @@ final class Amocrm {
 			'USER_LOGIN' => $login,
 			'USER_HASH' => $hash
 		);
+        $this->url = 'https://'. $subdomain .'.amocrm.ru/';
 		$this->subdomain = $subdomain;
-		if($this->debug) $this->log('Created params ==> ',$this->user );
+		if($this->debug) $this->log('Created params ==> ',[$this->user,$this->url] );
 	}
 
 	// информация об аккаунте
 	public function getInfo() {
-		$link = 'https://'. $this->subdomain .'.amocrm.ru/private/api/v2/json/accounts/current?'.http_build_query($this->user);
+		$link = $this->url.'accounts/current?'.http_build_query($this->user);
 		return file_get_contents($link);
 	}
+
+	public function getAccountInfo() {
+	    $link = $this->url.'account';
+	    var_dump($link);
+	    return $this->curlSend($link);
+    }
 
 	// вывод информации об аккаунте
 	public function getInfoPrint() {
 		print_r($this->getInfo());
 	}
 
-	// установка кастомных полей
-	public function setMap($data = array()) {
+	// установка кастомных полей сделки
+	public function setMap($data) {
 		$this->amocrm_map = $data;
 	}
+
+	// установка полей контактов
+    public function setMapContacts($data) {
+	    $this->contacts_map = $data;
+    }
 
 	// вывод карты кастомных полей
 	public function getMap() {
@@ -63,8 +76,8 @@ final class Amocrm {
 		curl_setopt($curl, CURLOPT_USERAGENT, 'amoCRM-API-client/1.0');
 		curl_setopt($curl, CURLOPT_URL, $link);
 		curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
-		curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
-		curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+		if($method == 'POST') curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
+		curl_setopt($curl, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
 		curl_setopt($curl, CURLOPT_HEADER, false);
 		curl_setopt($curl, CURLOPT_COOKIEFILE, dirname(__FILE__) . '/cookie.txt');
 		curl_setopt($curl, CURLOPT_COOKIEJAR, dirname(__FILE__) . '/cookie.txt');
@@ -73,33 +86,60 @@ final class Amocrm {
 
 		$out = curl_exec($curl);
 		$code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $code=(int)$code;
+        $errors=array(
+            301=>'Moved permanently',
+            400=>'Bad request',
+            401=>'Unauthorized',
+            403=>'Forbidden',
+            404=>'Not found',
+            500=>'Internal server error',
+            502=>'Bad gateway',
+            503=>'Service unavailable'
+        );
+        try
+        {
+            #Если код ответа не равен 200 или 204 - возвращаем сообщение об ошибке
+            if($code!=200 && $code!=204) {
+                throw new Exception(isset($errors[$code]) ? $errors[$code] : 'Undescribed error',$code);
+            }
+        }
+        catch(Exception $E)
+        {
+            die('Ошибка: '.$E->getMessage().PHP_EOL.'Код ошибки: '.$E->getCode());
+        }
 		curl_close($curl);
 		return $out;
 	}
 
 	// подключение к амо
 	public function auth() {
-		$subdom = $this->subdomain;
-		$link = 'https://' . $subdom . '.amocrm.ru/private/api/auth.php?type=json';
+		$link = $this->url.'private/api/auth.php?type=json';
 		$response = $this->curlSend($link,$this->user);
-		if($this->debug) $this->log('AUTH ==> ',$response);
+		$authRes = json_decode($response,true);
+		if($authRes['response']['error']) {
+		    $this->error(__FUNCTION__,$authRes['response']['error']);
+        }
+		if($this->debug) $this->log('AUTH ==> ',$authRes);
+		$this->auth = true;
 		return $response;
 	}
 
 	// установка лида
 	public function leadSet($data = array()) {
-		
-		$leads['request']['leads']['add'] = array(
+        $leads = [];
+        $leads['request']['leads']['add'] = array(
 			array(
 				'name' => $data['lead_name'],
-				"date_create" => time(),
+				"created_at" => time(),
 			)
 		);
 		if( $this->voronka_id ) {
-			$leads['request']['leads']['add'][0]['status_id'] = $this->voronka_id;
+            $leads['request']['leads']['add'][0]['status_id'] = $this->voronka_id;
 		}
-        $this->log('map',$this->amocrm_map);
+
 		if( $this->amocrm_map ) {
+            $custom_fields = [];
 			foreach($data as $k => $v) {
 				if(!isset($this->amocrm_map[$k])) continue;
 				if(empty($this->amocrm_map[$k]))  continue;
@@ -112,24 +152,28 @@ final class Amocrm {
 	            );
 	            $custom_fields[]=$obj;
 			}
-			$leads['request']['leads']['add'][0]['custom_fields'] = $custom_fields;
+            $this->log('map',$custom_fields);
+            $leads['request']['leads']['add'][0]['custom_fields'] = $custom_fields;
 		} else {
-			$leads['request']['leads']['add'][0]['custom_fields'] = array();
+            $leads['request']['leads']['add'][0]['custom_fields'] = array();
 		}
 
 		if( $this->tags ) {
-			$leads['request']['leads']['add'][0]['tags'] = $this->tags;
+            $leads['request']['leads']['add'][0]['tags'] = $this->tags;
 		}
 
-		if($this->debug) {
-			$this->log('Lead data ==> ',$leads);
-		}
-		$link = 'https://' . $this->subdomain . '.amocrm.ru/private/api/v2/json/leads/set';
-
+        if($this->debug) {
+            $this->log('Lead data ==> ',$leads);
+        }
+		$link = $this->url.'/api/v2/leads/set';
 		$res = $this->curlSend($link,$leads); // отправка лида
-		$lead_id = json_decode( $res, true);
-		if($this->debug) $this->log('answer server ==> ',$lead_id);
-		$lead_id = $lead_id['response']['leads']['add'][0]['id']; // получение id сделки
+		$jsonRes = json_decode( $res, true);
+		if($this->debug) $this->log('answer server ==> ',$jsonRes);
+		if(isset($jsonRes['response']['error'])) {
+            $this->error(__FUNCTION__,$jsonRes['response']['error']);
+            return 0;
+        }
+		$lead_id = $jsonRes['response']['leads']['add'][0]['id']; // получение id сделки
 		$this->lead_id = $lead_id;
 		return true;
 	}
@@ -139,20 +183,30 @@ final class Amocrm {
 		    print_r($text.PHP_EOL);
 			var_dump($data);
 		} else {
-			print_r($text.json_encode($data));
+			print_r($text.PHP_EOL.json_encode($data));
 		}
 		print_r(PHP_EOL.PHP_EOL);
 	}
 
+	public function error($text,$message) {
+        $dirname = dirname(__FILE__).DIRECTORY_SEPARATOR.'error.txt';
+        $today = date("Y-m-d H:i:s");
+        try {
+            file_put_contents($dirname,$today.PHP_EOL.$text.PHP_EOL.$message.PHP_EOL,FILE_APPEND);
+        } catch (Exception $e) {
+
+        }
+    }
+
 	// установка контакта
 	public function contactSet($data = array()) {
-
-		$custom_contact = array();
+        $contacts = [];
+		$custom_contact = [];
 		if( !empty($data['phone']) ) {
 			$custom_contact = array_merge($custom_contact, array(
 				array(
 					#Телефоны
-					'id' => $this->amocrm_map['phone'],
+					'id' => $this->contacts_map['phone'],
 					'values' => array(
 						array(
 							'value'=>$data['phone'],
@@ -168,7 +222,7 @@ final class Amocrm {
 			$custom_contact = array_merge($custom_contact, array(
 				array(
 					#Телефоны
-					'id' => $this->amocrm_map['email'],
+					'id' => $this->contacts_map['email'],
 					'values' => array(
 						array(
 							'value'=>$data['email'],
@@ -182,7 +236,7 @@ final class Amocrm {
 
 		$contacts['request']['contacts']['add']=array(
 		  array(
-			'name'=>(isset($data['name']) ? $data['name'] : '-'), #Имя контакта
+			'name'=> isset($data['name']) ? $data['name'] : '-', #Имя контакта
 			//'last_modified'=>1298904164, //optional
 			'linked_leads_id'=> $this->lead_id,
 			//'company_name'=>'amoCRM', #Наименование компании
@@ -191,7 +245,7 @@ final class Amocrm {
 		  )
 		);
 
-		$link='https://'. $this->subdomain .'.amocrm.ru/private/api/v2/json/contacts/set';
+		$link = $this->url.'private/api/v2/json/contacts/set';
 		return $this->curlSend($link,$contacts);
 	}
 
@@ -200,7 +254,7 @@ final class Amocrm {
 	    $data['element_id'] = $this->lead_id;
 	    $subdomain = $this->subdomain;
 	    # Формируем ссылку для запроса
-	    $link='https://'.$subdomain.".amocrm.ru/private/api/v2/json/$action/set?type=json";
+	    $link = $this->url.'private/api/v2/json/'.$action.'/set?type=json';
 
 	    # Массив с параметрами, которые нужно передать методом POST к API системы
 	    $notes['request'][$action]['add']=array(
@@ -209,19 +263,5 @@ final class Amocrm {
 	    return $this->curlSend($link,$notes);
 	    
 	} 
-
-	public function checkContact($user) {
-		if(!is_array($user)) return 0;
-
-	} 
-
-	public function contact() {
-		$link='https://'.$this->subdomain.".amocrm.ru/private/api/v2/json/contacts?type=json";
-		return $this->curlSend($link);
-	} 
-
-	public function __call($method,$data) {
-		$link='https://'.$this->subdomain.".amocrm.ru/private/api/v2/json/$action/set?type=json";
-	}
 
 }
