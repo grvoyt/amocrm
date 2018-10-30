@@ -11,15 +11,23 @@ class Amocrm {
 	private $debug = false;
 	private $subdomain;
 
+    /**
+     * Amocrm constructor.
+     * @param $login login
+     * @param $hash hash
+     * @param $subdomain subdomain
+     * @param bool $debug  debug
+     */
 	public function __construct($login,$hash,$subdomain,$debug = false) {
         $this->debug = $debug;
 		$this->user = array(
 			'USER_LOGIN' => $login,
 			'USER_HASH' => $hash
 		);
-        $this->url = 'https://'. $subdomain .'.amocrm.ru/';
+        $this->url = 'https://'. $subdomain .'.amocrm.ru';
 		$this->subdomain = $subdomain;
 		if($this->debug) $this->log('Created params ==> ',[$this->user,$this->url] );
+		return $this;
 	}
 
 	// информация об аккаунте
@@ -103,9 +111,12 @@ class Amocrm {
             if($code!=200 && $code!=204) {
                 throw new Exception(isset($errors[$code]) ? $errors[$code] : 'Undescribed error',$code);
             }
+
         }
         catch(Exception $E)
         {
+            if($this->debug) $this->log($E->getMessage(),$out);
+            $this->error($E->getMessage(),$out);
             die('Ошибка: '.$E->getMessage().PHP_EOL.'Код ошибки: '.$E->getCode());
         }
 		curl_close($curl);
@@ -114,7 +125,7 @@ class Amocrm {
 
 	// подключение к амо
 	public function auth() {
-		$link = $this->url.'private/api/auth.php?type=json';
+		$link = $this->url.'/private/api/auth.php?type=json';
 		$response = $this->curlSend($link,$this->user);
 		$authRes = json_decode($response,true);
 		if($authRes['response']['error']) {
@@ -177,6 +188,42 @@ class Amocrm {
 		$this->lead_id = $lead_id;
 		return true;
 	}
+
+    // установка лида
+
+    /**
+     * @param $lead_id lead_id
+     * @param $voronka_id voronka_id
+     * @param $name Deal name
+     * @return boolean
+     */
+    public function leadUpdateStatusId($lead_id,$voronka_id, $name = '') {
+        $leads = [];
+        $leads['update'] = [
+            [
+                'id' => $lead_id,
+                "updated_at" => time(),
+                "status_id" => $voronka_id
+            ]
+        ];
+
+        if($name !== '' ) $leads['update'][0]['name'] = $name;
+
+        if($this->debug) {
+            $this->log('Lead data ==> ',$leads);
+        }
+
+        $link = $this->url.'/api/v2/leads';
+        if($this->debug) $this->log('link',$link);
+        $res = $this->curlSend($link,$leads); // отправка лида
+        $jsonRes = json_decode( $res, true);
+        if($this->debug) $this->log('answer server ==> ',$jsonRes);
+        if(isset($jsonRes['response']['error']) || isset($jsonRes['response']['leads']['update']['errors'])) {
+            $this->error(__FUNCTION__,$jsonRes['response']['error']);
+            return false;
+        }
+        return true;
+    }
 
 	public function log($text,$data,$vardump = false) {
 		if($vardump) {
